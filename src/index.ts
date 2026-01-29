@@ -11,7 +11,7 @@ import { QueueType, DEFAULT_RATING, PLACEMENT_GAMES } from './game/types';
 import crypto from 'crypto';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
-import { getPlayerRating, updatePlayerAfterMatch, recordMatch } from './services/SupabaseService';
+import { getPlayerRating, updatePlayerAfterMatch, recordMatch, getPlayerPurchases, saveEquippedItems, getEquippedItems } from './services/SupabaseService';
 
 dotenv.config();
 
@@ -191,6 +191,62 @@ app.get('/player/:wallet', (req, res) => {
     placementGames: data.placementGames,
     isPlacement: data.placementGames < PLACEMENT_GAMES,
   });
+});
+
+// Get purchased items for a wallet
+app.get('/purchases/:wallet', async (req, res) => {
+  const { wallet } = req.params;
+
+  if (!isValidWalletAddress(wallet)) {
+    return res.status(400).json({ error: 'Invalid wallet address' });
+  }
+
+  try {
+    const itemIds = await getPlayerPurchases(wallet);
+    res.json({ items: itemIds });
+  } catch (error: any) {
+    console.error('Failed to fetch purchases:', error);
+    res.status(500).json({ error: 'Failed to fetch purchases' });
+  }
+});
+
+// Get equipped items for a wallet
+app.get('/equipped/:wallet', async (req, res) => {
+  const { wallet } = req.params;
+
+  if (!isValidWalletAddress(wallet)) {
+    return res.status(400).json({ error: 'Invalid wallet address' });
+  }
+
+  try {
+    const equipped = await getEquippedItems(wallet);
+    res.json({ equipped: equipped || null });
+  } catch (error: any) {
+    console.error('Failed to fetch equipped items:', error);
+    res.status(500).json({ error: 'Failed to fetch equipped items' });
+  }
+});
+
+// Save equipped items for a wallet
+app.post('/equipped/:wallet', async (req, res) => {
+  const { wallet } = req.params;
+  const { equippedItems } = req.body;
+
+  if (!isValidWalletAddress(wallet)) {
+    return res.status(400).json({ error: 'Invalid wallet address' });
+  }
+
+  if (!isValidEquippedItems(equippedItems)) {
+    return res.status(400).json({ error: 'Invalid equipped items' });
+  }
+
+  try {
+    await saveEquippedItems(wallet, equippedItems);
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Failed to save equipped items:', error);
+    res.status(500).json({ error: 'Failed to save equipped items' });
+  }
 });
 
 // Verify purchase on-chain

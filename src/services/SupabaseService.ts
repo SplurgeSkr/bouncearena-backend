@@ -154,6 +154,82 @@ export async function recordMatch(
 }
 
 /**
+ * Fetch all purchased item IDs for a given wallet.
+ */
+export async function getPlayerPurchases(wallet: string): Promise<string[]> {
+  const client = getClient();
+  if (!client) return [];
+
+  try {
+    const { data, error } = await client
+      .from('purchases')
+      .select('item_id')
+      .eq('buyer_wallet', wallet)
+      .eq('verified', true);
+
+    if (error || !data) return [];
+    return data.map((row: any) => row.item_id);
+  } catch (e) {
+    console.error('Failed to fetch player purchases:', e);
+    return [];
+  }
+}
+
+/**
+ * Save equipped items for a wallet.
+ */
+export async function saveEquippedItems(
+  wallet: string,
+  equippedItems: { paddle: string; ball: string; trail: string; court: string }
+): Promise<void> {
+  const client = getClient();
+  if (!client) return;
+
+  try {
+    const { error } = await client
+      .from('equipped_items')
+      .upsert({
+        user_wallet: wallet,
+        paddle: equippedItems.paddle,
+        ball: equippedItems.ball,
+        trail: equippedItems.trail,
+        court: equippedItems.court,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_wallet' });
+
+    if (error) {
+      console.error('Failed to save equipped items:', error);
+    }
+  } catch (e) {
+    console.error('Failed to save equipped items:', e);
+  }
+}
+
+/**
+ * Fetch equipped items for a wallet.
+ */
+export async function getEquippedItems(
+  wallet: string
+): Promise<{ paddle: string; ball: string; trail: string; court: string } | null> {
+  const client = getClient();
+  if (!client) return null;
+
+  try {
+    const { data, error } = await client
+      .from('equipped_items')
+      .select('paddle, ball, trail, court')
+      .eq('user_wallet', wallet)
+      .single();
+
+    if (error || !data) return null;
+    return data as { paddle: string; ball: string; trail: string; court: string };
+  } catch (e) {
+    console.error('Failed to fetch equipped items:', e);
+    return null;
+  }
+}
+
+/**
  * Record a purchase in purchases table.
  */
 export async function recordPurchase(
