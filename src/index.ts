@@ -114,7 +114,7 @@ function isValidEquippedItems(items: any): boolean {
 }
 
 function isValidPaddleY(paddleY: number): boolean {
-  return typeof paddleY === 'number' && paddleY >= 0 && paddleY <= 1 && !isNaN(paddleY);
+  return typeof paddleY === 'number' && paddleY >= 0 && paddleY <= 450 && !isNaN(paddleY);
 }
 
 function isValidMatchId(matchId: string): boolean {
