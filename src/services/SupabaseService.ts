@@ -22,6 +22,8 @@ function getClient(): SupabaseClient | null {
 export interface PlayerData {
   rating: number;
   placementGames: number;
+  wins: number;
+  losses: number;
 }
 
 export interface LeaderboardEntry {
@@ -56,6 +58,8 @@ export async function getPlayerRating(wallet: string): Promise<PlayerData | null
     return {
       rating: data.rating || 1000,
       placementGames: Math.min(totalGames, 10),
+      wins: data.wins || 0,
+      losses: data.losses || 0,
     };
   } catch (e) {
     console.error('Failed to fetch player rating:', e);

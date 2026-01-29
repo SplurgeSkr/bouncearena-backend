@@ -76,7 +76,7 @@ const gameManager = new GameManager();
 const matchmaking = new MatchmakingService();
 
 // In-memory player data store (replace with Supabase in production)
-const playerData: Map<string, { rating: number; placementGames: number }> = new Map();
+const playerData: Map<string, { rating: number; placementGames: number; wins: number; losses: number }> = new Map();
 
 // Authenticated socket sessions: socketId -> wallet
 const authenticatedSockets: Map<string, string> = new Map();
@@ -126,7 +126,7 @@ function isValidMatchId(matchId: string): boolean {
 // Helper to get or create player data (sync, uses in-memory cache)
 function getPlayerData(wallet: string) {
   if (!playerData.has(wallet)) {
-    playerData.set(wallet, { rating: DEFAULT_RATING, placementGames: 0 });
+    playerData.set(wallet, { rating: DEFAULT_RATING, placementGames: 0, wins: 0, losses: 0 });
   }
   return playerData.get(wallet)!;
 }
@@ -606,6 +606,8 @@ io.on('connection', (socket: Socket) => {
       rankTier: getRankTier(data.rating),
       placementGames: data.placementGames,
       isPlacement: data.placementGames < PLACEMENT_GAMES,
+      wins: data.wins,
+      losses: data.losses,
     });
   });
 
