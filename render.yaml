@@ -2,8 +2,14 @@ services:
   - type: web
     name: bouncearena-backend
     runtime: node
+    plan: free
     buildCommand: npm install && npm run build
     startCommand: npm start
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
+      - key: PORT
+        value: 3001
+      - key: SOLANA_RPC_URL
+        value: https://devnet.helius-rpc.com/?api-key=b016d994-f308-4924-8dfb-b016057b8f5b

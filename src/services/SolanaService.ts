@@ -10,8 +10,8 @@ import {
 import * as fs from 'fs';
 import * as path from 'path';
 
-// Solana RPC endpoint (use environment variable or default to devnet)
-const RPC_URL = process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.com';
+// Solana RPC endpoint (use environment variable or default to Helius devnet)
+const RPC_URL = process.env.SOLANA_RPC_URL || 'https://devnet.helius-rpc.com/?api-key=b016d994-f308-4924-8dfb-b016057b8f5b';
 
 // Program ID (will be set after deployment)
 const PROGRAM_ID = new PublicKey(
@@ -29,25 +29,46 @@ export class SolanaService {
   }
 
   /**
-   * Load server keypair from file (admin authority for submitting results)
+   * Load server keypair from environment variable (admin authority for submitting results)
+   * In production, set SERVER_KEYPAIR_JSON env var with the JSON array of the secret key
    */
   private loadServerKeypair(): void {
     try {
-      const keypairPath = process.env.SERVER_KEYPAIR_PATH || './server-keypair.json';
+      // Priority 1: Environment variable (most secure for production)
+      const keypairJson = process.env.SERVER_KEYPAIR_JSON;
+      if (keypairJson) {
+        const keypairData = JSON.parse(keypairJson);
+        this.serverKeypair = Keypair.fromSecretKey(new Uint8Array(keypairData));
+        console.log('Server keypair loaded from environment variable:', this.serverKeypair.publicKey.toString());
+        return;
+      }
 
-      if (fs.existsSync(keypairPath)) {
+      // Priority 2: File path (for local development only)
+      const keypairPath = process.env.SERVER_KEYPAIR_PATH;
+      if (keypairPath && fs.existsSync(keypairPath)) {
         const keypairData = JSON.parse(fs.readFileSync(keypairPath, 'utf-8'));
         this.serverKeypair = Keypair.fromSecretKey(new Uint8Array(keypairData));
-        console.log('Server keypair loaded:', this.serverKeypair.publicKey.toString());
-      } else {
-        console.warn('Server keypair not found. Generate one for production use.');
-        // For development, generate a temporary keypair
+        console.log('Server keypair loaded from file:', this.serverKeypair.publicKey.toString());
+        return;
+      }
+
+      // Development only: Generate temporary keypair
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('⚠️  No server keypair configured. Generating temporary keypair for development.');
         this.serverKeypair = Keypair.generate();
         console.log('Generated temporary keypair:', this.serverKeypair.publicKey.toString());
+      } else {
+        console.error('❌ CRITICAL: No server keypair configured in production!');
+        throw new Error('Server keypair must be configured in production via SERVER_KEYPAIR_JSON env var');
       }
     } catch (error) {
       console.error('Error loading server keypair:', error);
-      this.serverKeypair = Keypair.generate();
+      if (process.env.NODE_ENV !== 'production') {
+        this.serverKeypair = Keypair.generate();
+        console.log('Fallback: Generated temporary keypair:', this.serverKeypair.publicKey.toString());
+      } else {
+        throw error;
+      }
     }
   }
 

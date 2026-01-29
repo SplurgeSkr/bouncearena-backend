@@ -1,7 +1,7 @@
 {
-  "name": "pongbet-backend",
+  "name": "bouncearena-backend",
   "version": "1.0.0",
-  "description": "PongBet multiplayer backend server",
+  "description": "BounceArena multiplayer backend server",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
@@ -9,16 +9,24 @@
     "dev": "nodemon --exec ts-node src/index.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": ["pong", "solana", "betting", "multiplayer"],
+  "keywords": [
+    "pong",
+    "solana",
+    "betting",
+    "multiplayer"
+  ],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
     "@solana/web3.js": "^1.98.4",
+    "@supabase/supabase-js": "^2.93.2",
+    "bs58": "^6.0.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "socket.io": "^4.8.3",
+    "tweetnacl": "^1.0.3",
     "uuid": "^13.0.0"
   },
   "devDependencies": {
