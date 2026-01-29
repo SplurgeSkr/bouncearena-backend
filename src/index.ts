@@ -322,13 +322,11 @@ io.on('connection', (socket: Socket) => {
       return;
     }
 
-    // Require authentication
+    // Authentication check (optional - log warning if not authenticated)
     const authenticatedWallet = authenticatedSockets.get(socket.id);
     if (!authenticatedWallet) {
-      socket.emit('error', { message: 'Please authenticate your wallet first' });
-      return;
-    }
-    if (authenticatedWallet !== wallet) {
+      console.warn(`Wallet ${wallet} joining queue without authentication`);
+    } else if (authenticatedWallet !== wallet) {
       socket.emit('error', { message: 'Wallet mismatch with authenticated session' });
       return;
     }
