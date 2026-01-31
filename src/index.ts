@@ -9,6 +9,20 @@ import { calculateEloChange, getRankTier } from './utils/elo';
 import { v4 as uuidv4 } from 'uuid';
 import { QueueType, DEFAULT_RATING, PLACEMENT_GAMES } from './game/types';
 import crypto from 'crypto';
+
+// Simple retry wrapper for database writes
+async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 1000): Promise<T> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (i === retries - 1) throw e;
+      console.warn(`DB write failed (attempt ${i + 1}/${retries}), retrying in ${delay}ms...`);
+      await new Promise(r => setTimeout(r, delay * (i + 1)));
+    }
+  }
+  throw new Error('Unreachable');
+}
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 import { getPlayerRating, updatePlayerAfterMatch, recordMatch, getPlayerPurchases, saveEquippedItems, getEquippedItems } from './services/SupabaseService';
@@ -402,7 +416,30 @@ io.on('connection', (socket: Socket) => {
     });
 
     if (opponent) {
-      // Match found!
+      // Match found! Verify opponent socket is still connected before creating match
+      const opponentSocket = io.sockets.sockets.get(opponent.socketId);
+      if (!opponentSocket || !opponentSocket.connected) {
+        console.warn(`Opponent ${opponent.wallet} disconnected before match could start, re-queuing ${wallet}`);
+        // Put current player in the queue as searching
+        socket.emit('searching', { queueType, rating: player.rating });
+        // Re-add current player to queue on next tick
+        setTimeout(() => {
+          const retryOpponent = matchmaking.addToQueue({
+            socketId: socket.id,
+            wallet,
+            queueType,
+            rating: player.rating,
+            queuedAt: Date.now(),
+            equippedItems,
+          });
+          if (retryOpponent) {
+            // Found another opponent - emit join_queue again to trigger match logic
+            socket.emit('searching', { queueType, rating: player.rating });
+          }
+        }, 500);
+        return;
+      }
+
       const matchId = uuidv4();
       const opponentData = getPlayerData(opponent.wallet);
 
@@ -516,15 +553,15 @@ io.on('connection', (socket: Socket) => {
             // Clean up active match
             activeMatches.delete(matchId);
 
-            // Persist to Supabase (fire-and-forget)
+            // Persist to Supabase with retry
             const isP1Winner = winnerWallet === player1Wallet;
-            updatePlayerAfterMatch(player1Wallet, player1Data.rating, isP1Winner, 0, 0).catch((e) => console.error('Supabase error:', e));
-            updatePlayerAfterMatch(player2Wallet, player2Data.rating, !isP1Winner, 0, 0).catch((e) => console.error('Supabase error:', e));
-            recordMatch(
+            withRetry(() => updatePlayerAfterMatch(player1Wallet, player1Data.rating, isP1Winner, 0, 0)).catch((e) => console.error('Supabase error (p1 rating):', e));
+            withRetry(() => updatePlayerAfterMatch(player2Wallet, player2Data.rating, !isP1Winner, 0, 0)).catch((e) => console.error('Supabase error (p2 rating):', e));
+            withRetry(() => recordMatch(
               matchId, player1Wallet, player2Wallet, winnerWallet,
               finalMatch.gameState.player1Score, finalMatch.gameState.player2Score,
               queueType, ratingChanges.player1, ratingChanges.player2
-            ).catch((e) => console.error('Supabase error:', e));
+            )).catch((e) => console.error('Supabase error (match record):', e));
 
             console.log(`Match ${matchId} ended. Winner: ${winnerWallet}`);
           }
@@ -673,18 +710,18 @@ io.on('connection', (socket: Socket) => {
             forfeit: true,
           });
 
-          // Persist forfeit to Supabase
+          // Persist forfeit to Supabase with retry
           if (match.queueType === 'ranked') {
             const wd = getPlayerData(winnerWallet);
             const ld = getPlayerData(disconnectedWallet);
-            updatePlayerAfterMatch(winnerWallet, wd.rating, true, 0, 0).catch((e) => console.error('Supabase error:', e));
-            updatePlayerAfterMatch(disconnectedWallet, ld.rating, false, 0, 0).catch((e) => console.error('Supabase error:', e));
+            withRetry(() => updatePlayerAfterMatch(winnerWallet, wd.rating, true, 0, 0)).catch((e) => console.error('Supabase error:', e));
+            withRetry(() => updatePlayerAfterMatch(disconnectedWallet, ld.rating, false, 0, 0)).catch((e) => console.error('Supabase error:', e));
           }
-          recordMatch(
-            matchId, match.player1.wallet, match.player2.wallet, winnerWallet,
+          withRetry(() => recordMatch(
+            matchId, match.player1.wallet, match.player2!.wallet, winnerWallet,
             match.gameState.player1Score, match.gameState.player2Score,
             match.queueType, ratingChange, -(ratingChange)
-          ).catch((e) => console.error('Supabase error:', e));
+          )).catch((e) => console.error('Supabase error:', e));
         }
 
         // Clean up
